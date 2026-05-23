@@ -1,0 +1,949 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>🏐 VôleiScore — Ranking ao Vivo</title>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  :root {
+    --navy: #0d1b3e;
+    --navy-mid: #162554;
+    --blue: #1e3a8a;
+    --blue-light: #2563eb;
+    --yellow: #f59e0b;
+    --yellow-light: #fbbf24;
+    --gold: #f59e0b;
+    --silver: #94a3b8;
+    --bronze: #cd7f32;
+    --white: #ffffff;
+    --off: #f8fafc;
+    --muted: #94a3b8;
+    --border: #e2e8f0;
+    --success: #10b981;
+    --danger: #ef4444;
+    --radius: 14px;
+    --shadow: 0 4px 24px rgba(0,0,0,0.10);
+    --shadow-lg: 0 12px 40px rgba(0,0,0,0.16);
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'DM Sans', sans-serif;
+    background: var(--off);
+    min-height: 100vh;
+    color: var(--navy);
+  }
+
+  /* ── STATUS BANNER ── */
+  #status-banner {
+    position: fixed; top: 0; left: 0; right: 0;
+    z-index: 999;
+    padding: 10px 20px;
+    font-size: 13px;
+    font-weight: 500;
+    text-align: center;
+    transition: opacity .5s;
+  }
+  #status-banner.yellow { background: #fef3c7; color: #92400e; border-bottom: 2px solid var(--yellow); }
+  #status-banner.green  { background: #d1fae5; color: #065f46; border-bottom: 2px solid var(--success); }
+  #status-banner.red    { background: #fee2e2; color: #991b1b; border-bottom: 2px solid var(--danger); }
+  #status-banner.hidden { display: none; }
+
+  .page-wrap {
+    padding-top: 52px;
+    min-height: 100vh;
+  }
+
+  /* ── SECTIONS ── */
+  section { display: none; }
+  section.active { display: block; }
+
+  /* ── LOGIN ── */
+  #screen-login {
+    background: linear-gradient(145deg, var(--navy) 0%, var(--blue) 100%);
+    min-height: calc(100vh - 52px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+  }
+  #screen-login.active { display: flex; }
+
+  .login-card {
+    background: white;
+    border-radius: 24px;
+    padding: 48px 40px;
+    width: 100%;
+    max-width: 420px;
+    box-shadow: var(--shadow-lg);
+    position: relative;
+    overflow: hidden;
+  }
+  .login-card::before {
+    content: '🏐';
+    position: absolute;
+    font-size: 120px;
+    top: -20px; right: -20px;
+    opacity: 0.08;
+    transform: rotate(15deg);
+  }
+  .login-logo {
+    font-family: 'Bebas Neue', cursive;
+    font-size: 42px;
+    letter-spacing: 2px;
+    color: var(--blue);
+    line-height: 1;
+    margin-bottom: 4px;
+  }
+  .login-logo span { color: var(--yellow); }
+  .login-sub {
+    font-size: 13px;
+    color: var(--muted);
+    margin-bottom: 32px;
+  }
+
+  label {
+    display: block;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--navy);
+    text-transform: uppercase;
+    letter-spacing: .8px;
+    margin-bottom: 6px;
+  }
+  input, select, textarea {
+    width: 100%;
+    padding: 12px 16px;
+    border: 2px solid var(--border);
+    border-radius: 10px;
+    font-family: inherit;
+    font-size: 15px;
+    color: var(--navy);
+    background: white;
+    transition: border-color .2s;
+    outline: none;
+    margin-bottom: 16px;
+  }
+  input:focus, select:focus, textarea:focus {
+    border-color: var(--blue-light);
+  }
+
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 13px 24px;
+    border-radius: 10px;
+    font-family: inherit;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+    border: none;
+    transition: transform .15s, box-shadow .15s, background .15s;
+  }
+  .btn:hover { transform: translateY(-1px); box-shadow: var(--shadow); }
+  .btn:active { transform: translateY(0); }
+  .btn-primary { background: var(--blue); color: white; width: 100%; }
+  .btn-primary:hover { background: var(--blue-light); }
+  .btn-yellow { background: var(--yellow); color: var(--navy); }
+  .btn-yellow:hover { background: var(--yellow-light); }
+  .btn-ghost { background: transparent; color: var(--blue); border: 2px solid var(--border); }
+  .btn-ghost:hover { border-color: var(--blue); }
+  .btn-danger { background: var(--danger); color: white; }
+  .btn-sm { padding: 7px 14px; font-size: 13px; border-radius: 8px; }
+
+  /* ── TOP NAV ── */
+  .topnav {
+    background: var(--navy);
+    padding: 0 20px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    height: 60px;
+    position: sticky;
+    top: 52px;
+    z-index: 10;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.2);
+  }
+  .topnav-logo {
+    font-family: 'Bebas Neue', cursive;
+    font-size: 26px;
+    letter-spacing: 2px;
+    color: white;
+  }
+  .topnav-logo span { color: var(--yellow); }
+  .topnav-actions { display: flex; gap: 8px; }
+  .topnav-user { font-size: 13px; color: rgba(255,255,255,0.6); margin-right: 8px; }
+
+  /* ── MAIN CONTAINER ── */
+  .container {
+    max-width: 720px;
+    margin: 0 auto;
+    padding: 24px 16px 80px;
+  }
+
+  /* ── RANKING ── */
+  .section-title {
+    font-family: 'Bebas Neue', cursive;
+    font-size: 32px;
+    letter-spacing: 1px;
+    color: var(--navy);
+    margin-bottom: 4px;
+  }
+  .section-sub { font-size: 14px; color: var(--muted); margin-bottom: 24px; }
+
+  .ranking-list { display: flex; flex-direction: column; gap: 10px; }
+
+  .rank-card {
+    background: white;
+    border-radius: var(--radius);
+    padding: 16px 20px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    box-shadow: var(--shadow);
+    border-left: 4px solid transparent;
+    transition: transform .15s, box-shadow .15s;
+    cursor: default;
+  }
+  .rank-card:hover { transform: translateX(3px); box-shadow: var(--shadow-lg); }
+  .rank-card.rank-1 { border-left-color: var(--gold); background: linear-gradient(to right, #fffbeb, white); }
+  .rank-card.rank-2 { border-left-color: var(--silver); background: linear-gradient(to right, #f8fafc, white); }
+  .rank-card.rank-3 { border-left-color: var(--bronze); background: linear-gradient(to right, #fdf4ec, white); }
+
+  .rank-pos {
+    font-family: 'Bebas Neue', cursive;
+    font-size: 28px;
+    min-width: 44px;
+    text-align: center;
+    color: var(--muted);
+  }
+  .rank-card.rank-1 .rank-pos { color: var(--gold); }
+  .rank-card.rank-2 .rank-pos { color: var(--silver); }
+  .rank-card.rank-3 .rank-pos { color: var(--bronze); }
+
+  .rank-info { flex: 1; }
+  .rank-name { font-weight: 700; font-size: 16px; }
+  .rank-turma { font-size: 12px; color: var(--muted); margin-top: 2px; }
+
+  .rank-pts {
+    font-family: 'Bebas Neue', cursive;
+    font-size: 30px;
+    color: var(--blue);
+    letter-spacing: 1px;
+  }
+  .rank-pts-label { font-size: 11px; color: var(--muted); text-align: right; text-transform: uppercase; letter-spacing: .5px; }
+
+  .rank-medal { font-size: 28px; }
+
+  /* ── FLOATING FAB ── */
+  .fab {
+    position: fixed;
+    bottom: 24px; right: 24px;
+    width: 58px; height: 58px;
+    border-radius: 50%;
+    background: var(--yellow);
+    color: var(--navy);
+    font-size: 26px;
+    display: flex; align-items: center; justify-content: center;
+    box-shadow: 0 4px 20px rgba(245,158,11,.45);
+    cursor: pointer;
+    border: none;
+    transition: transform .2s, box-shadow .2s;
+    z-index: 50;
+  }
+  .fab:hover { transform: scale(1.1); box-shadow: 0 6px 28px rgba(245,158,11,.55); }
+
+  /* ── FORMS ── */
+  .card {
+    background: white;
+    border-radius: var(--radius);
+    padding: 28px 24px;
+    box-shadow: var(--shadow);
+    margin-bottom: 16px;
+  }
+
+  .form-row { display: flex; gap: 12px; }
+  .form-row > * { flex: 1; }
+
+  .back-btn {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-size: 13px; font-weight: 600;
+    color: var(--blue); cursor: pointer;
+    background: none; border: none;
+    padding: 0; margin-bottom: 20px;
+    font-family: inherit;
+  }
+  .back-btn:hover { text-decoration: underline; }
+
+  /* ── ALUNA ROW ── */
+  .aluna-row {
+    display: flex; align-items: center; gap: 12px;
+    padding: 14px 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .aluna-row:last-child { border-bottom: none; }
+  .aluna-row-info { flex: 1; }
+  .aluna-row-name { font-weight: 600; font-size: 15px; }
+  .aluna-row-meta { font-size: 12px; color: var(--muted); }
+  .aluna-row-pts {
+    font-family: 'Bebas Neue', cursive;
+    font-size: 22px;
+    color: var(--blue);
+    margin-right: 12px;
+  }
+  .aluna-row-actions { display: flex; gap: 6px; }
+
+  /* ── MODAL ── */
+  .modal-backdrop {
+    display: none;
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,.45);
+    z-index: 100;
+    align-items: center; justify-content: center;
+    padding: 20px;
+  }
+  .modal-backdrop.open { display: flex; }
+  .modal {
+    background: white;
+    border-radius: 20px;
+    padding: 32px 28px;
+    width: 100%; max-width: 440px;
+    box-shadow: var(--shadow-lg);
+    animation: modal-in .25s ease;
+  }
+  @keyframes modal-in {
+    from { transform: scale(.92) translateY(20px); opacity: 0; }
+    to   { transform: scale(1) translateY(0); opacity: 1; }
+  }
+  .modal-title {
+    font-family: 'Bebas Neue', cursive;
+    font-size: 26px;
+    margin-bottom: 20px;
+    color: var(--navy);
+  }
+  .modal-actions { display: flex; gap: 10px; margin-top: 8px; }
+  .modal-actions .btn { flex: 1; }
+
+  /* ── TOAST ── */
+  #toast {
+    position: fixed;
+    bottom: 90px; left: 50%;
+    transform: translateX(-50%) translateY(20px);
+    background: var(--navy);
+    color: white;
+    padding: 12px 24px;
+    border-radius: 100px;
+    font-size: 14px; font-weight: 500;
+    opacity: 0;
+    transition: all .3s;
+    z-index: 200;
+    pointer-events: none;
+    white-space: nowrap;
+  }
+  #toast.show {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+  #toast.success { background: var(--success); }
+  #toast.error   { background: var(--danger); }
+
+  /* ── EMPTY STATE ── */
+  .empty {
+    text-align: center; padding: 48px 20px;
+    color: var(--muted);
+  }
+  .empty-icon { font-size: 48px; margin-bottom: 12px; }
+  .empty-text { font-size: 15px; }
+
+  /* ── PTS BADGE ── */
+  .pts-badge {
+    display: inline-block;
+    background: #eff6ff;
+    color: var(--blue-light);
+    border-radius: 100px;
+    padding: 3px 10px;
+    font-size: 12px;
+    font-weight: 700;
+  }
+
+  /* ── RESPONSIVE ── */
+  @media (max-width: 480px) {
+    .login-card { padding: 36px 24px; }
+    .rank-card { padding: 14px 16px; gap: 12px; }
+    .rank-pos { font-size: 22px; min-width: 34px; }
+    .rank-pts { font-size: 24px; }
+    .form-row { flex-direction: column; gap: 0; }
+  }
+</style>
+</head>
+<body>
+
+<!-- STATUS BANNER -->
+<div id="status-banner" class="yellow">⏳ Verificando conexão...</div>
+
+<div class="page-wrap">
+
+<!-- ══ SCREEN: LOGIN ══ -->
+<section id="screen-login" class="active">
+  <div class="login-card">
+    <div class="login-logo">Vôlei<span>Score</span></div>
+    <div class="login-sub">Sistema de Ranking para Professores</div>
+
+    <label for="login-email">Email</label>
+    <input id="login-email" type="email" placeholder="professor@escola.com" value="professor1@escola.com">
+
+    <label for="login-senha">Senha</label>
+    <input id="login-senha" type="password" placeholder="••••••••" value="senha123">
+
+    <div id="login-error" style="color:var(--danger);font-size:13px;margin-bottom:12px;display:none;"></div>
+    <button class="btn btn-primary" id="btn-login">Entrar →</button>
+  </div>
+</section>
+
+<!-- ══ SCREEN: RANKING ══ -->
+<section id="screen-ranking">
+  <nav class="topnav">
+    <div class="topnav-logo">Vôlei<span>Score</span></div>
+    <div class="topnav-actions">
+      <span class="topnav-user" id="nav-user-name"></span>
+      <button class="btn btn-ghost btn-sm" id="btn-logout">Sair</button>
+    </div>
+  </nav>
+  <div class="container">
+    <div class="section-title">🏆 Ranking</div>
+    <div class="section-sub">Classificação ao vivo por pontos</div>
+    <div id="ranking-list" class="ranking-list">
+      <div class="empty"><div class="empty-icon">🏐</div><div class="empty-text">Carregando...</div></div>
+    </div>
+  </div>
+  <button class="fab" id="btn-fab-pts" title="Registrar Pontos">＋</button>
+</section>
+
+<!-- ══ SCREEN: REGISTRAR PONTOS ══ -->
+<section id="screen-pontos">
+  <nav class="topnav">
+    <div class="topnav-logo">Vôlei<span>Score</span></div>
+  </nav>
+  <div class="container">
+    <button class="back-btn" id="btn-back-pontos">← Voltar ao Ranking</button>
+    <div class="section-title">Registrar Pontos</div>
+    <div class="section-sub">Recompense o desempenho das alunas</div>
+    <div class="card">
+      <label for="pts-aluna">Aluna</label>
+      <select id="pts-aluna"><option value="">Selecione...</option></select>
+
+      <label for="pts-valor">Pontos (1–10)</label>
+      <input id="pts-valor" type="number" min="1" max="10" value="1" placeholder="Ex: 5">
+
+      <label for="pts-motivo">Motivo</label>
+      <select id="pts-motivo">
+        <option value="Presença">✅ Presença</option>
+        <option value="Gol">🎯 Gol / Ponto</option>
+        <option value="Melhor Desempenho">⭐ Melhor Desempenho</option>
+        <option value="Atitude">💪 Atitude</option>
+        <option value="Outro">📝 Outro</option>
+      </select>
+
+      <button class="btn btn-primary" id="btn-registrar-pts">🏐 Registrar Pontos</button>
+    </div>
+
+    <div style="margin-top:24px">
+      <button class="btn btn-ghost" id="btn-ir-gerenciar" style="width:100%">⚙️ Gerenciar Alunas</button>
+    </div>
+  </div>
+</section>
+
+<!-- ══ SCREEN: GERENCIAR ALUNAS ══ -->
+<section id="screen-alunas">
+  <nav class="topnav">
+    <div class="topnav-logo">Vôlei<span>Score</span></div>
+  </nav>
+  <div class="container">
+    <button class="back-btn" id="btn-back-alunas">← Voltar ao Ranking</button>
+    <div class="section-title">Gerenciar Alunas</div>
+    <div class="section-sub">Adicione, edite ou remova alunas</div>
+
+    <button class="btn btn-yellow" id="btn-nova-aluna" style="margin-bottom:20px">+ Nova Aluna</button>
+
+    <div class="card">
+      <div id="alunas-list"></div>
+    </div>
+  </div>
+</section>
+
+</div><!-- /.page-wrap -->
+
+<!-- ══ MODAL: ALUNA ══ -->
+<div class="modal-backdrop" id="modal-aluna">
+  <div class="modal">
+    <div class="modal-title" id="modal-aluna-title">Nova Aluna</div>
+
+    <label for="aluna-nome">Nome *</label>
+    <input id="aluna-nome" type="text" placeholder="Nome completo">
+
+    <label for="aluna-email">Email (opcional)</label>
+    <input id="aluna-email" type="email" placeholder="aluna@email.com">
+
+    <label for="aluna-turma">Turma</label>
+    <select id="aluna-turma">
+      <option value="Infantil 1">Infantil 1</option>
+      <option value="Infantil 2">Infantil 2</option>
+      <option value="Intermediário">Intermediário</option>
+      <option value="Avançado">Avançado</option>
+    </select>
+
+    <div class="modal-actions">
+      <button class="btn btn-ghost" id="btn-modal-cancelar">Cancelar</button>
+      <button class="btn btn-primary" id="btn-modal-salvar">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<!-- TOAST -->
+<div id="toast"></div>
+
+<script>
+// ════════════════════════════════════════════════
+// CREDENCIAIS — substitua pelos valores reais
+// ════════════════════════════════════════════════
+const SUPABASE_URL = "https://hhdvtxbkuyvfxcxjtpsy.supabase.co";
+const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhoZHZ0eGJrdXl2ZnhjeGp0cHN5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk0OTMxODQsImV4cCI6MjA5NTA2OTE4NH0.kokzZ81wdBZVYsmO5cAUomj9m8F0NoVVsEETm8h4Ps8";
+
+// ════════════════════════════════════════════════
+// MODO DEMO — dados em memória
+// ════════════════════════════════════════════════
+let DEMO_MODE = false;
+let demoAlunas = [
+  { id: 'a1', nome: 'Ana Silva',        email: '', turma: 'Infantil 1',   pontos_totais: 25 },
+  { id: 'a2', nome: 'Beatriz Santos',   email: '', turma: 'Infantil 1',   pontos_totais: 20 },
+  { id: 'a3', nome: 'Carla Oliveira',   email: '', turma: 'Infantil 2',   pontos_totais: 18 },
+  { id: 'a4', nome: 'Diana Costa',      email: '', turma: 'Infantil 2',   pontos_totais: 15 },
+  { id: 'a5', nome: 'Eduarda Martins',  email: '', turma: 'Intermediário', pontos_totais: 12 },
+  { id: 'a6', nome: 'Fernanda Lima',    email: '', turma: 'Intermediário', pontos_totais: 10 },
+  { id: 'a7', nome: 'Gabriela Rocha',   email: '', turma: 'Avançado',      pontos_totais:  8 },
+];
+let demoUsuarios = [
+  { id: 'u1', email: 'professor1@escola.com', senha_hash: 'senha123', nome: 'Professor 1' }
+];
+
+let sb = null;
+let currentUser = null;
+let editingAlunaId = null;
+
+// ════════════════════════════════════════════════
+// UTILS
+// ════════════════════════════════════════════════
+function genId() {
+  return 'demo-' + Math.random().toString(36).slice(2,10);
+}
+
+function showToast(msg, type = 'success') {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'show ' + type;
+  setTimeout(() => { t.className = ''; }, 2800);
+}
+
+function setBanner(type, msg) {
+  const b = document.getElementById('status-banner');
+  b.className = type;
+  b.textContent = msg;
+  if (type === 'green') setTimeout(() => b.className = 'hidden', 3500);
+}
+
+function showScreen(id) {
+  document.querySelectorAll('section').forEach(s => s.classList.remove('active'));
+  document.getElementById(id)?.classList.add('active');
+}
+
+// ════════════════════════════════════════════════
+// INIT
+// ════════════════════════════════════════════════
+async function init() {
+  const empty = !SUPABASE_URL || SUPABASE_URL === 'SUA_URL_AQUI'
+             || !SUPABASE_KEY || SUPABASE_KEY === 'SUA_ANON_KEY_AQUI';
+
+  if (empty) {
+    DEMO_MODE = true;
+    setBanner('yellow', '⚠️ Modo demo — credenciais não preenchidas. Usando dados de exemplo em memória.');
+  } else {
+    try {
+      sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+      const { error } = await sb.from('alunas').select('id').limit(1);
+      if (error) throw error;
+      setBanner('green', '✅ Supabase conectado com sucesso!');
+    } catch (e) {
+      DEMO_MODE = true;
+      setBanner('red', '❌ Credenciais preenchidas mas conexão falhou (' + (e.message || e) + '). Usando modo demo.');
+    }
+  }
+
+  // Restaurar sessão
+  const saved = sessionStorage.getItem('voleiscore_user');
+  if (saved) {
+    currentUser = JSON.parse(saved);
+    updateNavUser();
+    showScreen('screen-ranking');
+    loadRanking();
+  }
+}
+
+// ════════════════════════════════════════════════
+// LOGIN
+// ════════════════════════════════════════════════
+async function handleLogin() {
+  const email = document.getElementById('login-email')?.value.trim();
+  const senha  = document.getElementById('login-senha')?.value;
+  const errEl  = document.getElementById('login-error');
+  errEl.style.display = 'none';
+
+  if (!email || !senha) { errEl.textContent = 'Preencha email e senha.'; errEl.style.display = 'block'; return; }
+
+  if (DEMO_MODE) {
+    const u = demoUsuarios.find(u => u.email === email && u.senha_hash === senha);
+    if (!u) { errEl.textContent = 'Email ou senha inválidos.'; errEl.style.display = 'block'; return; }
+    currentUser = u;
+  } else {
+    try {
+      const { data, error } = await sb.from('usuarios')
+        .select('*').eq('email', email).eq('senha_hash', senha).single();
+      if (error || !data) { errEl.textContent = 'Email ou senha inválidos.'; errEl.style.display = 'block'; return; }
+      currentUser = data;
+    } catch (e) {
+      errEl.textContent = 'Erro ao conectar: ' + e.message;
+      errEl.style.display = 'block';
+      return;
+    }
+  }
+
+  sessionStorage.setItem('voleiscore_user', JSON.stringify(currentUser));
+  updateNavUser();
+  showScreen('screen-ranking');
+  loadRanking();
+}
+
+function updateNavUser() {
+  const el = document.getElementById('nav-user-name');
+  if (el) el.textContent = currentUser?.nome || currentUser?.email || '';
+}
+
+function handleLogout() {
+  sessionStorage.removeItem('voleiscore_user');
+  currentUser = null;
+  showScreen('screen-login');
+}
+
+// ════════════════════════════════════════════════
+// RANKING
+// ════════════════════════════════════════════════
+async function loadRanking() {
+  const list = document.getElementById('ranking-list');
+  list.innerHTML = '<div class="empty"><div class="empty-icon">⏳</div><div class="empty-text">Carregando...</div></div>';
+
+  let alunas = [];
+  if (DEMO_MODE) {
+    alunas = [...demoAlunas].sort((a,b) => b.pontos_totais - a.pontos_totais);
+  } else {
+    try {
+      const { data, error } = await sb.from('alunas').select('*').order('pontos_totais', { ascending: false });
+      if (error) throw error;
+      alunas = data || [];
+    } catch (e) {
+      list.innerHTML = '<div class="empty"><div class="empty-icon">❌</div><div class="empty-text">Erro: ' + e.message + '</div></div>';
+      return;
+    }
+  }
+
+  if (!alunas.length) {
+    list.innerHTML = '<div class="empty"><div class="empty-icon">🏐</div><div class="empty-text">Nenhuma aluna cadastrada ainda</div></div>';
+    return;
+  }
+
+  const medals = ['🥇','🥈','🥉'];
+  list.innerHTML = alunas.map((a, i) => {
+    const pos = i + 1;
+    const cls = pos <= 3 ? ' rank-' + pos : '';
+    const medal = pos <= 3 ? `<div class="rank-medal">${medals[i]}</div>` : '';
+    return `
+    <div class="rank-card${cls}">
+      <div class="rank-pos">${pos <= 3 ? medals[i] : pos + 'º'}</div>
+      <div class="rank-info">
+        <div class="rank-name">${escHtml(a.nome)}</div>
+        <div class="rank-turma">${escHtml(a.turma || '—')}</div>
+      </div>
+      <div style="text-align:right">
+        <div class="rank-pts">${a.pontos_totais}</div>
+        <div class="rank-pts-label">pontos</div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function escHtml(s) {
+  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// ════════════════════════════════════════════════
+// REGISTRAR PONTOS
+// ════════════════════════════════════════════════
+async function loadAlunaDropdown(selectId) {
+  const sel = document.getElementById(selectId);
+  if (!sel) return;
+  let alunas = [];
+  if (DEMO_MODE) {
+    alunas = [...demoAlunas].sort((a,b) => a.nome.localeCompare(b.nome));
+  } else {
+    try {
+      const { data, error } = await sb.from('alunas').select('id,nome').order('nome');
+      if (error) throw error;
+      alunas = data || [];
+    } catch(e) { return; }
+  }
+  sel.innerHTML = '<option value="">Selecione a aluna...</option>' +
+    alunas.map(a => `<option value="${a.id}">${escHtml(a.nome)}</option>`).join('');
+}
+
+async function handleRegistrarPontos() {
+  const alunaId = document.getElementById('pts-aluna')?.value;
+  const valor   = parseInt(document.getElementById('pts-valor')?.value);
+  const motivo  = document.getElementById('pts-motivo')?.value;
+
+  if (!alunaId) { showToast('Selecione uma aluna.', 'error'); return; }
+  if (!valor || valor < 1 || valor > 10) { showToast('Pontos devem ser entre 1 e 10.', 'error'); return; }
+
+  if (DEMO_MODE) {
+    const a = demoAlunas.find(x => x.id === alunaId);
+    if (a) { a.pontos_totais += valor; }
+    showToast(`✅ +${valor} pts para ${a?.nome || 'aluna'} (${motivo})`);
+    showScreen('screen-ranking');
+    loadRanking();
+    return;
+  }
+
+  try {
+    // INSERT log
+    const { error: e1 } = await sb.from('pontos_log').insert({
+      aluna_id: alunaId,
+      pontos: valor,
+      motivo: motivo,
+      registrado_por: currentUser?.id
+    }).select().single();
+    if (e1) throw e1;
+
+    // UPDATE total
+    const { data: aluna, error: e2 } = await sb.from('alunas').select('pontos_totais').eq('id', alunaId).single();
+    if (e2) throw e2;
+    const { error: e3 } = await sb.from('alunas').update({ pontos_totais: (aluna.pontos_totais || 0) + valor }).eq('id', alunaId).select().single();
+    if (e3) throw e3;
+
+    showToast(`✅ Pontos registrados com sucesso!`);
+    showScreen('screen-ranking');
+    loadRanking();
+  } catch(e) {
+    showToast('Erro: ' + e.message, 'error');
+  }
+}
+
+// ════════════════════════════════════════════════
+// GERENCIAR ALUNAS
+// ════════════════════════════════════════════════
+async function loadAlunasList() {
+  const list = document.getElementById('alunas-list');
+  list.innerHTML = '<div style="text-align:center;padding:20px;color:var(--muted)">Carregando...</div>';
+
+  let alunas = [];
+  if (DEMO_MODE) {
+    alunas = [...demoAlunas].sort((a,b) => a.nome.localeCompare(b.nome));
+  } else {
+    try {
+      const { data, error } = await sb.from('alunas').select('*').order('nome');
+      if (error) throw error;
+      alunas = data || [];
+    } catch(e) {
+      list.innerHTML = '<div style="color:var(--danger);padding:16px">Erro: ' + e.message + '</div>';
+      return;
+    }
+  }
+
+  if (!alunas.length) {
+    list.innerHTML = '<div class="empty"><div class="empty-icon">🏐</div><div class="empty-text">Nenhuma aluna cadastrada</div></div>';
+    return;
+  }
+
+  list.innerHTML = alunas.map(a => `
+    <div class="aluna-row">
+      <div class="aluna-row-info">
+        <div class="aluna-row-name">${escHtml(a.nome)}</div>
+        <div class="aluna-row-meta">${escHtml(a.turma || '—')}${a.email ? ' · ' + escHtml(a.email) : ''}</div>
+      </div>
+      <div class="aluna-row-pts">${a.pontos_totais}</div>
+      <div class="aluna-row-actions">
+        <button class="btn btn-ghost btn-sm btn-edit" data-id="${a.id}">✏️</button>
+        <button class="btn btn-danger btn-sm btn-del" data-id="${a.id}">🗑</button>
+      </div>
+    </div>
+  `).join('');
+
+  list.querySelectorAll('.btn-edit').forEach(b => {
+    b.addEventListener('click', () => openModalEdit(b.dataset.id));
+  });
+  list.querySelectorAll('.btn-del').forEach(b => {
+    b.addEventListener('click', () => confirmDelete(b.dataset.id));
+  });
+}
+
+function openModalNew() {
+  editingAlunaId = null;
+  document.getElementById('modal-aluna-title').textContent = '+ Nova Aluna';
+  document.getElementById('aluna-nome').value = '';
+  document.getElementById('aluna-email').value = '';
+  document.getElementById('aluna-turma').value = 'Infantil 1';
+  document.getElementById('modal-aluna').classList.add('open');
+}
+
+async function openModalEdit(id) {
+  let aluna;
+  if (DEMO_MODE) {
+    aluna = demoAlunas.find(a => a.id === id);
+  } else {
+    try {
+      const { data, error } = await sb.from('alunas').select('*').eq('id', id).single();
+      if (error) throw error;
+      aluna = data;
+    } catch(e) { showToast('Erro: ' + e.message, 'error'); return; }
+  }
+  if (!aluna) return;
+  editingAlunaId = id;
+  document.getElementById('modal-aluna-title').textContent = 'Editar Aluna';
+  document.getElementById('aluna-nome').value = aluna.nome || '';
+  document.getElementById('aluna-email').value = aluna.email || '';
+  document.getElementById('aluna-turma').value = aluna.turma || 'Infantil 1';
+  document.getElementById('modal-aluna').classList.add('open');
+}
+
+function closeModal() {
+  document.getElementById('modal-aluna').classList.remove('open');
+}
+
+async function handleSalvarAluna() {
+  const nome  = document.getElementById('aluna-nome')?.value.trim();
+  const email = document.getElementById('aluna-email')?.value.trim();
+  const turma = document.getElementById('aluna-turma')?.value;
+
+  if (!nome) { showToast('Nome é obrigatório.', 'error'); return; }
+
+  if (DEMO_MODE) {
+    if (editingAlunaId) {
+      const a = demoAlunas.find(x => x.id === editingAlunaId);
+      if (a) { a.nome = nome; a.email = email; a.turma = turma; }
+      showToast('Aluna atualizada!');
+    } else {
+      demoAlunas.push({ id: genId(), nome, email, turma, pontos_totais: 0 });
+      showToast('Aluna adicionada!');
+    }
+    closeModal();
+    loadAlunasList();
+    return;
+  }
+
+  try {
+    if (editingAlunaId) {
+      const { error } = await sb.from('alunas').update({ nome, email, turma }).eq('id', editingAlunaId).select().single();
+      if (error) throw error;
+      showToast('Aluna atualizada!');
+    } else {
+      const { error } = await sb.from('alunas').insert({ nome, email, turma, pontos_totais: 0 }).select().single();
+      if (error) throw error;
+      showToast('Aluna adicionada!');
+    }
+    closeModal();
+    loadAlunasList();
+  } catch(e) {
+    showToast('Erro: ' + e.message, 'error');
+  }
+}
+
+async function confirmDelete(id) {
+  const a = DEMO_MODE ? demoAlunas.find(x => x.id === id) : { nome: 'esta aluna' };
+  if (!confirm(`Remover ${a?.nome || 'esta aluna'}? Esta ação não pode ser desfeita.`)) return;
+
+  if (DEMO_MODE) {
+    demoAlunas = demoAlunas.filter(x => x.id !== id);
+    showToast('Aluna removida.');
+    loadAlunasList();
+    return;
+  }
+
+  try {
+    const { error: e1 } = await sb.from('pontos_log').delete().eq('aluna_id', id).select();
+    if (e1) throw e1;
+    const { error: e2 } = await sb.from('alunas').delete().eq('id', id).select().single();
+    if (e2) throw e2;
+    showToast('Aluna removida.');
+    loadAlunasList();
+  } catch(e) {
+    showToast('Erro: ' + e.message, 'error');
+  }
+}
+
+// ════════════════════════════════════════════════
+// DOM READY
+// ════════════════════════════════════════════════
+document.addEventListener('DOMContentLoaded', () => {
+  init();
+
+  // Login
+  document.getElementById('btn-login')?.addEventListener('click', handleLogin);
+  document.getElementById('login-senha')?.addEventListener('keydown', e => {
+    if (e.key === 'Enter') handleLogin();
+  });
+
+  // Logout
+  document.getElementById('btn-logout')?.addEventListener('click', handleLogout);
+
+  // FAB → Registrar Pontos
+  document.getElementById('btn-fab-pts')?.addEventListener('click', () => {
+    showScreen('screen-pontos');
+    loadAlunaDropdown('pts-aluna');
+  });
+
+  // Back buttons
+  document.getElementById('btn-back-pontos')?.addEventListener('click', () => {
+    showScreen('screen-ranking');
+    loadRanking();
+  });
+  document.getElementById('btn-back-alunas')?.addEventListener('click', () => {
+    showScreen('screen-ranking');
+    loadRanking();
+  });
+
+  // Ir para gerenciar (from pontos)
+  document.getElementById('btn-ir-gerenciar')?.addEventListener('click', () => {
+    showScreen('screen-alunas');
+    loadAlunasList();
+  });
+
+  // Registrar pontos
+  document.getElementById('btn-registrar-pts')?.addEventListener('click', handleRegistrarPontos);
+
+  // Nova aluna
+  document.getElementById('btn-nova-aluna')?.addEventListener('click', openModalNew);
+
+  // Modal
+  document.getElementById('btn-modal-cancelar')?.addEventListener('click', closeModal);
+  document.getElementById('btn-modal-salvar')?.addEventListener('click', handleSalvarAluna);
+  document.getElementById('aluna-nome')?.addEventListener('keydown', e => {
+    if (e.key === 'Enter') handleSalvarAluna();
+  });
+  document.getElementById('modal-aluna')?.addEventListener('click', e => {
+    if (e.target === document.getElementById('modal-aluna')) closeModal();
+  });
+});
+</script>
+</body>
+</html>
